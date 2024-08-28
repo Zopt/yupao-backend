@@ -147,6 +147,7 @@ public class TeamController {
         Page<Team> page = new Page<>(teamQuery.getPageNum(), teamQuery.getPageSize());
         QueryWrapper<Team> queryWapper = new QueryWrapper<>(team);
         Page<Team> resultPage = teamService.page(page, queryWapper);
+
         return ResultUtils.success(resultPage);
     }
 

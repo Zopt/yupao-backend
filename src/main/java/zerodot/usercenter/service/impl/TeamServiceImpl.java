@@ -90,7 +90,6 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         final long userId = loginUser.getId();
 
         QueryWrapper<Team> queryWrapper = new QueryWrapper<>();
-//        log.error(queryWrapper.toString());
         queryWrapper.eq("userId", userId);
         long hasTeam = this.count(queryWrapper);
         if (hasTeam >= 5) {
@@ -151,18 +150,25 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             if (userId != null && userId > 0) {
                 queryWapper.eq("userId", userId);
             }
-            Integer status = teamQuery.getStatus();
-            TeamStatusEnum statusEnum = TeamStatusEnum.getEnumByValue(status);
-            if (statusEnum == null) {
-                statusEnum = TeamStatusEnum.PUBLIC;
+            Integer statusValue = teamQuery.getStatus();
+            TeamStatusEnum status = TeamStatusEnum.getEnumByValue(statusValue);
+            HashMap<Enum, Integer> statusMap = new HashMap<>();
+            
+            //加入查询的队伍类型
+            if (statusValue != null){
+                statusMap.put(status,statusValue);
+            }else {
+                //每天条件就只能查询公开的
+                statusMap.put(TeamStatusEnum.PRIVATE,0);
             }
-            if (!isAdmin && statusEnum.equals(TeamStatusEnum.PRIVATE)) {
-                throw new BusinessException(ErrorCode.NOT_AUTH);
+            statusMap.put(status, statusValue);
+            if (isAdmin) {
+                //管理员可以查全部
+                statusMap.put(TeamStatusEnum.PUBLIC, 0);
+                statusMap.put(TeamStatusEnum.PRIVATE, 1);
+                statusMap.put(TeamStatusEnum.SECRET, 2);
             }
-            queryWapper.eq("status", statusEnum.getValues());
-            if (status != null && status > 0) {// status >= 0
-                queryWapper.eq("status", status);
-            }
+            queryWapper.in("status", statusMap.values());
         }
 
         //不展示过期队伍
@@ -250,9 +256,9 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         //分布式锁，只有一个线程可以获取锁
         RLock lock = redissonClient.getLock("yupao:Join_Team");
         try {
-            while (true){
-                if (lock.tryLock(0,30000, TimeUnit.MILLISECONDS)) {
-                    System.out.println("加锁线程Id"+Thread.currentThread().getName());
+            while (true) {
+                if (lock.tryLock(0, 30000, TimeUnit.MILLISECONDS)) {
+                    System.out.println("加锁线程Id" + Thread.currentThread().getName());
                     //查询用户已经加入的队伍数量
                     QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
                     userTeamQueryWrapper.eq("userId", userId);
@@ -286,10 +292,10 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         } catch (InterruptedException e) {
             log.error("redissonClientError" + e);
             return false;
-        }finally {
+        } finally {
             //只能释放自己的锁
-            if(lock.isHeldByCurrentThread()){
-                System.out.println("释放锁线程Id"+Thread.currentThread().getName());
+            if (lock.isHeldByCurrentThread()) {
+                System.out.println("释放锁线程Id" + Thread.currentThread().getName());
                 lock.unlock();
             }
         }

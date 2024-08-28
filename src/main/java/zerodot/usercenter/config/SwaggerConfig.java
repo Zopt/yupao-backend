@@ -22,7 +22,7 @@ import static java.util.stream.Collectors.toSet;
  */
 @Configuration
 @EnableSwagger2
-@Profile({"dev","test"})
+@Profile({"dev","test","prod"})
 @ComponentScan(basePackages = {"zerodot.usercenter.controller"})
 public class SwaggerConfig{
     @Bean
@@ -41,9 +41,9 @@ public class SwaggerConfig{
     private ApiInfo apiInfo(){
         Contact contact = new Contact("zerodot","https://github.com/zerodot/","3300745564@qq.com");
         return new ApiInfoBuilder().
-                title("zerodot用户中心").
-                description("用户中心接口说明文档").
-                termsOfServiceUrl("https://www.cqinfo.top").
+                title("学习匹配系统").
+                description("学习匹配系统接口说明文档").
+                termsOfServiceUrl("https://yupao.cqinfo.top").
                 contact(contact).
                 version("1.0.0").
                 build();

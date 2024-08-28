@@ -21,7 +21,7 @@ spring:
     host: 127.0.0.1
     database: 1
 server:
-  port: 5432
+  port: 8080
   servlet:
     context-path: /api
 #    session:
