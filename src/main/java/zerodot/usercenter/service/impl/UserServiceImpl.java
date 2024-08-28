@@ -7,6 +7,8 @@ import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.math3.util.Pair;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
@@ -42,6 +44,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     // 盐值 混淆密码
     private static final String SALT = "zerodot";
 
+    @Resource
+    RedissonClient redissonClient;
+
 
     @Override
     public long userRegister(String userAccount, String userPassword, String checkPassword, String plantCode) {
@@ -68,32 +73,43 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (!checkPassword.equals(userPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "二次输入密码不相同");
         }
-        //账户不能重复
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("userAccount", userAccount);
-        long count = userMapper.selectCount(queryWrapper);
-        if (count < 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
+        RLock lock = redissonClient.getLock("yupao:Join_Team");
+        try {
+            while (true){
+                //账户不能重复
+                QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+                queryWrapper.eq("userAccount", userAccount);
+                long count = userMapper.selectCount(queryWrapper);
+                if (count < 0) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
+                }
+                //星球编号
+                queryWrapper = new QueryWrapper<>();
+                queryWrapper.eq("plantCode", plantCode);
+                count = userMapper.selectCount(queryWrapper);
+                if (count > 0) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球编号已注册");
+                }
+                //2.加密
+                String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
+                //3.插入数据
+                User user = new User();
+                user.setUserAccount(userAccount);
+                user.setUserPassword(encryptPassword);
+                user.setPlantCode(plantCode);
+                boolean saveResult = this.save(user);
+                if (!saveResult) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "信息保存失败");
+                }
+                return user.getId();
+            }
+        } finally {
+            //只能释放自己的锁
+            if(lock.isHeldByCurrentThread()){
+                System.out.println("释放锁线程Id"+Thread.currentThread().getName());
+                lock.unlock();
+            }
         }
-        //星球编号
-        queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("plantCode", plantCode);
-        count = userMapper.selectCount(queryWrapper);
-        if (count > 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球编号已注册");
-        }
-        //2.加密
-        String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
-        //3.插入数据
-        User user = new User();
-        user.setUserAccount(userAccount);
-        user.setUserPassword(encryptPassword);
-        user.setPlantCode(plantCode);
-        boolean saveResult = this.save(user);
-        if (!saveResult) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "信息保存失败");
-        }
-        return user.getId();
     }
 
     @Override
@@ -287,7 +303,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Long userId = user.getId();
         //如果是管理员允许更新任意用户
         //如果不是管理员，只允许更新当前自己的
-        if (!isAdmin(loginUser) && userId != loginUser.getId()) {
+        if (!isAdmin(loginUser) && !Objects.equals(userId, loginUser.getId())) {
             throw new BusinessException(ErrorCode.NOT_AUTH);
         }
         User oldUser = userMapper.selectById(userId);
