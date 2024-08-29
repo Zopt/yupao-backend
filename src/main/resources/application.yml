@@ -6,7 +6,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/yupao?useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&&serverTimezone=Asia/Shanghai
-    username: root
+    username: yupao
     password: 123456
   #session 失效时间 单位分钟
   session:
@@ -21,7 +21,7 @@ spring:
     host: 127.0.0.1
     database: 1
 server:
-  port: 8080
+  port: 5432
   servlet:
     context-path: /api
 #    session:
